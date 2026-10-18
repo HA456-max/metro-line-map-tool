@@ -8,22 +8,24 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ant-design/icons": "^5.1.0",
+    "antd": "^5.9.0",
+    "classnames": "^2.3.2",
+    "html-to-image": "^1.10.9",
+    "lz-string": "^1.4.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "antd": "^5.9.0",
-    "@ant-design/icons": "^5.1.0",
-    "zustand": "^4.4.0",
-    "lz-string": "^1.4.4",
-    "html-to-image": "^1.10.9",
+    "uuid": "^9.0.0",
     "zod": "^3.25.1",
-    "classnames": "^2.3.2"
+    "zustand": "^4.4.0"
   },
   "devDependencies": {
-    "vite": "^5.0.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "less": "^4.4.3",
     "typescript": "^5.1.6",
     "@types/react": "^18.2.21",
     "@types/react-dom": "^18.2.7",
-    "less": "^4.4.3",
+    "vite": "^5.0.0",
     "vite-plugin-pwa": "^0.18.2"
   }
 }
