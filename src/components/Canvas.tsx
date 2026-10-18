@@ -2,25 +2,16 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useStore } from '../store/useStore';
 import { screenToCanvas, snapToGrid } from '../utils/geometry';
 import { routeBetween, simplifyPath } from '../utils/routing';
-import { advancedRoute } from '../utils/advancedRouting';
+import advancedRoute from '../utils/advancedRouting';
 import { exportSVGFull } from '../utils/export';
 import { Button } from 'antd';
 
 /**
- * Canvas.tsx
- * - SVG canvas with:
- *   - pan (space+drag) and wheel zoom centered at mouse
- *   - selection box (screen -> canvas coords), multi-select
- *   - dragging single station and dragging multiple selected stations
- *   - grid snap while dragging (configurable gridSize)
- *   - realtime line redraw; lines support branches (Y 型)
- *   - transfer detection (stations within threshold marked transfer)
- *
- * Performance: uses requestAnimationFrame for batched updates during drag
+ * Canvas.tsx (updated)
+ * - add Alt+drag branch creation: Alt+pointerdown on a station then drag to empty area to create a branch station
  */
 export default function Canvas() {
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const rafRef = useRef<number | null>(null);
   const store = useStore();
   const projects = store((s) => s.projects);
   const currentProjectId = store((s) => s.currentProjectId);
@@ -29,9 +20,9 @@ export default function Canvas() {
   const select = store((s) => s.select);
   const selectionIds = store((s) => s.selectionIds);
   const pushHistory = store((s) => s.pushHistory);
+  const createBranch = store((s) => s.createBranch);
 
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
-  const [isPanning, setIsPanning] = useState(false);
   const [spaceDown, setSpaceDown] = useState(false);
   const [draggingStation, setDraggingStation] = useState<string | null>(null);
   const [dragStartMouse, setDragStartMouse] = useState<{ x: number; y: number } | null>(null);
@@ -39,6 +30,7 @@ export default function Canvas() {
   const [selectionBox, setSelectionBox] = useState<null | { x0: number; y0: number; x1: number; y1: number }>(null);
   const [gridSnap, setGridSnap] = useState(true);
   const [gridSize, setGridSize] = useState(8);
+  const [branchCreating, setBranchCreating] = useState<null | { fromStationId: string; startClient: { x: number; y: number } }>(null);
 
   useEffect(() => {
     if (!currentProjectId) {
@@ -67,7 +59,6 @@ export default function Canvas() {
     return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKeyUp); };
   }, []);
 
-  // wheel zoom centered at mouse
   const onWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     const svg = svgRef.current!;
@@ -82,7 +73,7 @@ export default function Canvas() {
 
   const onMouseDown = (e: React.MouseEvent) => {
     if (spaceDown || e.button === 1) {
-      setIsPanning(true);
+      (e.target as Element).setPointerCapture?.((e as any).pointerId);
     } else {
       if (e.target === svgRef.current) {
         const rect = svgRef.current!.getBoundingClientRect();
@@ -94,9 +85,6 @@ export default function Canvas() {
   };
 
   const onMouseMove = (e: React.MouseEvent) => {
-    if (isPanning) {
-      setView((v) => ({ ...v, x: v.x + e.movementX, y: v.y + e.movementY }));
-    }
     if (selectionBox) {
       const rect = svgRef.current!.getBoundingClientRect();
       const x = e.clientX - rect.left;
@@ -120,14 +108,12 @@ export default function Canvas() {
         moveSelectedStations({ x: dx, y: dy });
         setDragStartMouse({ x: e.clientX, y: e.clientY });
       } else {
-        // single
         updateStationPos(draggingStation, snapped);
       }
     }
   };
 
   const onMouseUp = (e: React.MouseEvent) => {
-    setIsPanning(false);
     if (selectionBox) {
       const rect = svgRef.current!.getBoundingClientRect();
       const x0 = selectionBox.x0; const y0 = selectionBox.y0; const x1 = selectionBox.x1; const y1 = selectionBox.y1;
@@ -146,6 +132,29 @@ export default function Canvas() {
       }
       setSelectionBox(null);
     }
+
+    if (branchCreating) {
+      // create new station at release point if released on empty area
+      const svg = svgRef.current!;
+      const pos = screenToCanvas(e.clientX, e.clientY, svg, view);
+      // ensure not on existing station (simple distance check)
+      const project = currentProjectId ? projects[currentProjectId] : undefined;
+      let tooClose = false;
+      if (project) {
+        for (const s of Object.values(project.stations)) {
+          const d = Math.hypot(s.pos.x - pos.x, s.pos.y - pos.y);
+          if (d < 12) { tooClose = true; break; }
+        }
+      }
+      if (!tooClose && project) {
+        const lineId = Object.values(project.lines).find((l) => l.stationIds.includes(branchCreating.fromStationId))?.id;
+        if (lineId) {
+          createBranch(lineId, branchCreating.fromStationId, pos, '分支站');
+        }
+      }
+      setBranchCreating(null);
+    }
+
     if (draggingStation) {
       setDraggingStation(null);
       setDragStartMouse(null);
@@ -155,6 +164,11 @@ export default function Canvas() {
 
   const onStationPointerDown = (stationId: string, e: React.PointerEvent) => {
     e.stopPropagation();
+    // altKey + pointerdown starts branch-creation drag
+    if (e.altKey) {
+      setBranchCreating({ fromStationId: stationId, startClient: { x: e.clientX, y: e.clientY } });
+      return;
+    }
     if (!selectionIds.includes(stationId)) select([stationId], false);
     setDraggingStation(stationId);
     (e.target as Element).setPointerCapture?.(e.pointerId);
@@ -166,7 +180,6 @@ export default function Canvas() {
   const lines = Object.values(project.lines);
   const stations = project.stations;
 
-  // detect transfer stations
   useEffect(() => {
     const threshold = 6;
     const stArray = Object.values(stations);
@@ -210,7 +223,6 @@ export default function Canvas() {
             const buildPath = (ids: string[]) => {
               const pts = ids.map((id) => stations[id]?.pos).filter(Boolean);
               if (pts.length <= 1) return [] as any;
-              // try advanced router for obstacle avoidance; fallback to simple router
               const poly: { x: number; y: number }[] = [];
               for (let i = 0; i < pts.length - 1; i++) {
                 try { const seg = advancedRoute(pts[i], pts[i + 1], Object.values(stations)); poly.push(...(i === 0 ? seg : seg.slice(1))); }
