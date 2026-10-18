@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// 设置 base 为仓库名子路径，避免 GitHub Pages 白屏（静态资源 404）
+// 设置 base 为 '//'，避免 GitHub Pages 白屏（静态资源 404）
 const repoBase = '//';
 
 export default defineConfig({
