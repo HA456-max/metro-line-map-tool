@@ -1,0 +1,14 @@
+ :root {
+  --bg: #ffffff;
+  --panel-bg: #f6f6f6;
+  --text: #111827;
+  --muted: #6b7280;
+  --accent: #2563eb;
+  --shadow: rgba(16,24,40,0.06);
+  --radius: 6px;
+  --canvas-grid: #e6e6e6;
+  --canvas-bg: #fff;
+}
+
+.app { height: 100vh; display: flex; background: var(--bg); color: var(--text); font-family: "Inter", "Noto Sans SC", "Microsoft YaHei", sans-serif; }
+.panel { background: var(--panel-bg); border-radius: var(--radius); box-shadow: 0 1px 6px var(--shadow); }

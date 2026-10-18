@@ -1,0 +1,24 @@
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
+
+export default defineConfig({
+  base: '/',
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.ico', 'robots.txt', 'icons/*.png'],
+      manifest: {
+        name: 'Metro Line Map Tool',
+        short_name: 'MetroMap',
+        description: '纯前端地铁线路图绘制工具',
+        theme_color: '#ffffff',
+        icons: [
+          { src: 'icons/pwa-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icons/pwa-512.png', sizes: '512x512', type: 'image/png' }
+        ]
+      }
+    })
+  ]
+});
