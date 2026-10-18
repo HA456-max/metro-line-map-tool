@@ -3,7 +3,8 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 // 设置 base 为 '//'，避免 GitHub Pages 白屏（静态资源 404）
-const repoBase = '//';
+// 注意首尾都要有斜杠，且替换为你的真实仓库名
+const repoBase = '/metro-line-map/';
 
 export default defineConfig({
   base: repoBase,
