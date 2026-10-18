@@ -1,3 +1,4 @@
+// Added branch-related APIs and utilities to store
 import create from 'zustand';
 import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
@@ -21,6 +22,11 @@ interface RootState {
   updateStation: (id: ID, patch: Partial<Station>) => void;
   updateStationPos: (stationId: ID, pos: { x: number; y: number }) => void;
   moveSelectedStations: (delta: { x: number; y: number }) => void;
+
+  // branch APIs
+  createBranch: (lineId: ID, fromStationId: ID, newStationPos: { x: number; y: number }, newStationName?: string) => string;
+  insertStationToBranch: (lineId: ID, branchId: ID, index: number, stationId: ID) => void;
+  removeBranch: (lineId: ID, branchId: ID) => void;
 
   selectionIds: ID[];
   select: (ids: ID[], additive?: boolean) => void;
@@ -166,6 +172,48 @@ export const useStore = create<RootState>()(
             s.pos = { x: s.pos.x + delta.x, y: s.pos.y + delta.y };
           });
           const projects = { ...state.projects, [pid]: project };
+          return { projects };
+        }),
+
+      // branch APIs
+      createBranch: (lineId, fromStationId, newStationPos, newStationName) =>
+        set((state) => {
+          const pid = state.currentProjectId!;
+          if (!pid) throw new Error('No current project');
+          const project = JSON.parse(JSON.stringify(state.projects[pid])) as Project;
+          const newStationId = uuidv4();
+          project.stations[newStationId] = { id: newStationId, name: newStationName || '分支站', pos: newStationPos, type: 'normal', labelPosition: 'bottom' };
+          const branchId = uuidv4();
+          const line = project.lines[lineId];
+          if (!line.branches) line.branches = [];
+          line.branches.push({ id: branchId, stationIds: [fromStationId, newStationId] });
+          const projects = { ...state.projects, [pid]: project };
+          get().pushHistory(JSON.parse(JSON.stringify(projects)));
+          return branchId;
+        }),
+
+      insertStationToBranch: (lineId, branchId, index, stationId) =>
+        set((state) => {
+          const pid = state.currentProjectId!;
+          const project = JSON.parse(JSON.stringify(state.projects[pid])) as Project;
+          const line = project.lines[lineId];
+          if (!line || !line.branches) return {} as any;
+          const br = line.branches.find((b) => b.id === branchId);
+          if (!br) return {} as any;
+          br.stationIds.splice(index, 0, stationId);
+          const projects = { ...state.projects, [pid]: project };
+          return { projects };
+        }),
+
+      removeBranch: (lineId, branchId) =>
+        set((state) => {
+          const pid = state.currentProjectId!;
+          const project = JSON.parse(JSON.stringify(state.projects[pid])) as Project;
+          const line = project.lines[lineId];
+          if (!line || !line.branches) return {} as any;
+          line.branches = line.branches.filter((b) => b.id !== branchId);
+          const projects = { ...state.projects, [pid]: project };
+          get().pushHistory(JSON.parse(JSON.stringify(projects)));
           return { projects };
         }),
 
